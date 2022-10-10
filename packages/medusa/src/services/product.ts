@@ -33,9 +33,11 @@ import {
 import { buildQuery, isDefined, setMetadata } from "../utils"
 import { formatException } from "../utils/exception-formatter"
 import EventBusService from "./event-bus"
+import { ProductOptionValueRepository } from "../repositories/product-option-value"
 
 type InjectedDependencies = {
   manager: EntityManager
+  productOptionValueRepository: typeof ProductOptionValueRepository
   productOptionRepository: typeof ProductOptionRepository
   productRepository: typeof ProductRepository
   productVariantRepository: typeof ProductVariantRepository
@@ -52,6 +54,8 @@ class ProductService extends TransactionBaseService {
   protected manager_: EntityManager
   protected transactionManager_: EntityManager | undefined
 
+  // eslint-disable-next-line max-len
+  protected readonly productOptionValueRepository_: typeof ProductOptionValueRepository
   protected readonly productOptionRepository_: typeof ProductOptionRepository
   protected readonly productRepository_: typeof ProductRepository
   protected readonly productVariantRepository_: typeof ProductVariantRepository
@@ -72,6 +76,7 @@ class ProductService extends TransactionBaseService {
 
   constructor({
     manager,
+    productOptionValueRepository,
     productOptionRepository,
     productRepository,
     productVariantRepository,
@@ -87,6 +92,7 @@ class ProductService extends TransactionBaseService {
     super(arguments[0])
 
     this.manager_ = manager
+    this.productOptionValueRepository_ = productOptionValueRepository
     this.productOptionRepository_ = productOptionRepository
     this.productRepository_ = productRepository
     this.productVariantRepository_ = productVariantRepository
@@ -805,6 +811,9 @@ class ProductService extends TransactionBaseService {
       const productOptionRepo = manager.getCustomRepository(
         this.productOptionRepository_
       )
+      const productOptionValueRepo = manager.getCustomRepository(
+        this.productOptionValueRepository_
+      )
 
       const product = await this.retrieve(productId, {
         relations: ["variants", "variants.options"],
@@ -812,6 +821,7 @@ class ProductService extends TransactionBaseService {
 
       const productOption = await productOptionRepo.findOne({
         where: { id: optionId, product_id: productId },
+        relations: ["values"],
       })
 
       if (!productOption) {
@@ -853,6 +863,8 @@ class ProductService extends TransactionBaseService {
 
       // If we reach this point, we can safely delete the product option
       await productOptionRepo.softRemove(productOption)
+
+      await productOptionValueRepo.softRemove(productOption.values)
 
       await this.eventBus_
         .withTransaction(manager)
